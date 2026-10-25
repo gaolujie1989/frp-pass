@@ -1,6 +1,6 @@
 name: CI
 
-on: [push, pull_request]
+on: [push, pull_request, workflow_dispatch]
 
 permissions:
   contents: read
@@ -25,6 +25,12 @@ jobs:
   docker:
     runs-on: ubuntu-latest
     needs: test
+    concurrency:
+      group: ghcr-${{ github.repository }}-${{ github.ref }}
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      packages: write
     steps:
       - uses: actions/checkout@v7
       - uses: docker/setup-buildx-action@v4
@@ -33,6 +39,9 @@ jobs:
           context: .
           load: true
           tags: frp-pass:ci
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
       - name: Validate Compose
         run: |
           cp config.example.toml config.toml
@@ -40,3 +49,51 @@ jobs:
           docker compose -f compose.yaml -f compose.frps.yaml config --quiet
       - name: Smoke test image
         run: python tests/smoke_container.py
+      # Normal pushes only run CI. Publish explicitly with Run workflow, or a release: commit.
+      - name: Prepare release
+        id: release
+        if: github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && startsWith(github.event.head_commit.message, 'release:')))
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="$(python -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')"
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Invalid release version" >&2; exit 1; }
+          image="ghcr.io/${GITHUB_REPOSITORY,,}"
+          grep -Fq "image: $image:$version" compose.yaml || { echo "Compose image version must match pyproject.toml" >&2; exit 1; }
+          VERSION="$version" python - <<'PY'
+          import os
+          import urllib.error
+          import urllib.request
+          url = f'https://api.github.com/repos/{os.environ["GITHUB_REPOSITORY"]}/releases/tags/v{os.environ["VERSION"]}'
+          request = urllib.request.Request(url, headers={"Authorization": f'Bearer {os.environ["GH_TOKEN"]}', "Accept": "application/vnd.github+json"})
+          try:
+              with urllib.request.urlopen(request, timeout=20):
+                  raise SystemExit("Release already exists; refusing to replace it")
+          except urllib.error.HTTPError as error:
+              if error.code != 404:
+                  raise
+          PY
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Push image to GHCR
+        if: steps.release.outputs.version != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          image="ghcr.io/${GITHUB_REPOSITORY,,}"
+          printf '%s' "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          docker tag frp-pass:ci "$image:$VERSION"
+          docker tag frp-pass:ci "$image:latest"
+          docker push "$image:$VERSION"
+          docker push "$image:latest"
+          docker pull "$image:$VERSION"
+      - name: Create GitHub Release
+        if: steps.release.outputs.version != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.release.outputs.version }}
+        run: |
+          sha256sum compose.yaml config.example.toml > SHA256SUMS
+          gh release create "v$VERSION" compose.yaml config.example.toml SHA256SUMS \
+            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "v$VERSION" \
+            --notes-file CHANGELOG.md

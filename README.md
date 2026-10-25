@@ -5,6 +5,21 @@ Python + Gunicorn + 原生 WSGI，无 Web 应用框架、OTP、数据库或登�
 
 **项目只提供普通 HTTP 服务，默认端口 9000。**
 
+## 使用已构建镜像
+
+镜像：`ghcr.io/gaolujie1989/frp-pass:0.1.0`（`linux/amd64`），也提供 `latest`。
+下载 Release 附件中的 `compose.yaml` 和 `config.example.toml`，放在同一目录：
+
+```bash
+cp config.example.toml config.toml
+docker compose pull auth
+docker compose run --rm --no-deps auth python -m frp_ip_auth.hash_password
+# 将生成的哈希填入 config.toml 的 users.admin.password_hash。
+docker compose up -d --no-build
+```
+
+如果镜像包设为私有，拉取前需要先登录 GHCR；公开镜像可以直接拉取。
+
 ## Docker 部署
 
 ```bash
@@ -92,3 +107,8 @@ python -m venv .venv
 ```
 
 CI 验证 Python 3.12/3.14、Docker 构建、Compose 配置和容器 HTTP 登录。
+
+## 发布版本
+
+同时修改 `pyproject.toml` 的版本号和 `compose.yaml` 的镜像版本后，在 GitHub Actions 中手动运行主分支的 CI。
+检查通过后会推送 GHCR 镜像并创建对应 Release；已有 Release 不覆盖。

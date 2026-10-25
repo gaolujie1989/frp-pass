@@ -1,7 +1,7 @@
 services:
   auth:
     build: .
-    image: frp-pass:local
+    image: ghcr.io/gaolujie1989/frp-pass:0.1.0
     restart: unless-stopped
     volumes:
       - type: bind
