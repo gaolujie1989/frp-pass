@@ -4,6 +4,7 @@ import json
 import subprocess
 import tempfile
 import time
+import urllib.parse
 import urllib.request
 from pathlib import Path
 
@@ -15,7 +16,6 @@ def docker(*args):
 def main():
     image = "frp-pass:ci"
     root = Path(__file__).resolve().parents[1]
-    gateway = json.loads(docker("network", "inspect", "bridge"))[0]["IPAM"]["Config"][0]["Gateway"]
     encoded = docker(
         "run",
         "--rm",
@@ -31,9 +31,6 @@ def main():
             (root / "config.example.toml")
             .read_text()
             .replace("REPLACE_WITH_GENERATED_ARGON2ID_HASH", encoded)
-        )
-        content = content.replace(
-            'trusted_proxies = ["172.30.55.2/32"]', f'trusted_proxies = ["{gateway}/32"]'
         )
         config.write_text(content)
         # The image's non-root user must be able to traverse and read this synthetic fixture.
@@ -65,18 +62,21 @@ def main():
                     time.sleep(0.1)
             else:
                 raise AssertionError("Container did not become healthy")
-            request = urllib.request.Request(
-                f"http://127.0.0.1:{port}/login",
-                headers={
-                    "Host": "access.example.com",
-                    "X-Forwarded-Proto": "https",
-                    "X-Forwarded-For": "198.51.100.1",
-                },
-            )
-            with opener.open(request, timeout=3) as response:
+            url = f"http://127.0.0.1:{port}/login"
+            with opener.open(url, timeout=3) as response:
                 assert "FRP 访问授权" in response.read().decode()
+            data = urllib.parse.urlencode(
+                {
+                    "username": "admin",
+                    "password": "container-test-password",
+                }
+            ).encode()
+            with opener.open(url, data=data, timeout=3) as response:
+                assert "授权成功" in response.read().decode()
             assert docker("inspect", "--format", "{{.Config.User}}", container) == "10001:10001"
-            print("PASS: non-root read-only container serves health and login")
+            print(
+                "PASS: non-root read-only HTTP container serves health and accepts password login"
+            )
         finally:
             print(docker("logs", container))
             docker("rm", "-f", container)

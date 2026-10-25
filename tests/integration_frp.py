@@ -9,6 +9,7 @@ import json
 import os
 import socket
 import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -63,8 +64,7 @@ def main():
         directory = Path(directory)
         password_hash = PasswordHasher().hash("local-test-password")
         config = directory / "config.toml"
-        config.write_text(f'''public_origin = "https://access.example.com"
-trusted_proxies = ["127.0.0.1/32"]
+        config.write_text(f'''trusted_proxies = ["127.0.0.1/32"]
 plugin_sources = ["127.0.0.1/32"]
 [channels]
 ssh = "tcp"
@@ -73,7 +73,6 @@ password_hash = "{password_hash}"
 channels = ["ssh"]
 ''')
         env["FRP_AUTH_CONFIG"] = str(config)
-        env.pop("PUBLIC_ORIGIN", None)
         server_config = directory / "frps.toml"
         server_config.write_text(f"""bindAddr = "127.0.0.1"
 bindPort = {control}
@@ -108,9 +107,6 @@ remotePort = {remote}
 
         def forwarded_request(path, data=None):
             headers = {
-                "Host": "access.example.com",
-                "Origin": "https://access.example.com",
-                "X-Forwarded-Proto": "https",
                 "X-Forwarded-For": "127.0.0.1",
             }
             request = urllib.request.Request(
@@ -128,7 +124,9 @@ remotePort = {remote}
             launch(
                 "auth",
                 [
-                    str(root / ".venv/bin/gunicorn"),
+                    sys.executable,
+                    "-m",
+                    "gunicorn",
                     "--config",
                     "gunicorn.conf.py",
                     "--bind",
@@ -158,9 +156,7 @@ remotePort = {remote}
             ) as response:
                 # Form encoding is rejected, so even this malformed registration is closed.
                 assert json.load(response)["reject"]
-            print(
-                "PASS: real FRP TCP denied before login, allowed after HTTPS-context password login"
-            )
+            print("PASS: real FRP TCP denied before login, allowed after HTTP password login")
         except Exception:
             for log in logs:
                 log.flush()

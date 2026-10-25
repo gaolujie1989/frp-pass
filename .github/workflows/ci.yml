@@ -35,11 +35,8 @@ jobs:
           tags: frp-pass:ci
       - name: Validate Compose
         run: |
-          cp .env.example .env
           cp config.example.toml config.toml
           cp deploy/frps.example.toml deploy/frps.toml
           docker compose -f compose.yaml -f compose.frps.yaml config --quiet
-      - name: Validate Caddy
-        run: docker run --rm -e AUTH_DOMAIN=access.example.com -v "$PWD/deploy/Caddyfile:/etc/caddy/Caddyfile:ro" caddy:2.11.7 caddy validate --config /etc/caddy/Caddyfile
       - name: Smoke test image
         run: python tests/smoke_container.py

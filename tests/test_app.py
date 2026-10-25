@@ -17,7 +17,6 @@ def test_service_implementation_exists():
 def settings_data():
     password_hash = PasswordHasher(time_cost=1, memory_cost=8192).hash("test-only-password")
     return {
-        "public_origin": "https://access.example.com",
         "trusted_proxies": ["127.0.0.2/32"],
         "plugin_sources": ["127.0.0.1/32"],
         "channels": {"ssh": "tcp", "rdp": "tcp", "other": "tcp"},
@@ -51,8 +50,8 @@ def request(
         "REQUEST_METHOD": method,
         "PATH_INFO": path.split("?", 1)[0],
         "QUERY_STRING": path.partition("?")[2],
-        "SERVER_NAME": "access.example.com",
-        "SERVER_PORT": "443",
+        "SERVER_NAME": "127.0.0.1",
+        "SERVER_PORT": "9000",
         "SERVER_PROTOCOL": "HTTP/1.1",
         "wsgi.version": (1, 0),
         "wsgi.url_scheme": "http",
@@ -62,10 +61,8 @@ def request(
         "wsgi.multiprocess": False,
         "wsgi.run_once": False,
         "REMOTE_ADDR": peer,
-        "HTTP_HOST": "access.example.com",
-        "HTTP_X_FORWARDED_PROTO": "https",
+        "HTTP_HOST": "127.0.0.1:9000",
         "HTTP_X_FORWARDED_FOR": ip,
-        "HTTP_ORIGIN": "https://access.example.com",
         "CONTENT_TYPE": "application/x-www-form-urlencoded",
         "CONTENT_LENGTH": str(len(body)),
     }
@@ -132,20 +129,45 @@ def test_failed_login_does_not_revoke_successful_grant(setup_app):
     assert not callback(app, connection())[1]["reject"]
 
 
+def test_http_login_does_not_require_domain_https_or_origin(setup_app):
+    app, _ = setup_app
+    result = login(
+        app,
+        headers={
+            "HTTP_HOST": "127.0.0.1:9000",
+            "HTTP_X_FORWARDED_PROTO": "",
+            "HTTP_ORIGIN": "",
+        },
+    )
+    assert result["status"] == 200
+    assert not callback(app, connection())[1]["reject"]
+
+
+def test_direct_http_ignores_untrusted_forwarded_ip(setup_app):
+    app, _ = setup_app
+    assert login(app, peer="198.51.100.99")["status"] == 200
+    assert not callback(app, connection(remote="198.51.100.99:1234"))[1]["reject"]
+    assert callback(app, connection())[1]["reject"]
+
+
+def test_configuration_needs_no_external_url_and_allows_no_proxy(settings_data):
+    from frp_ip_auth.config import Settings
+
+    settings_data["trusted_proxies"] = []
+    assert Settings.from_dict(settings_data).trusted_proxies == ()
+
+
 @pytest.mark.parametrize(
-    "headers,peer",
+    "forwarded_ip",
     [
-        ({}, "198.51.100.99"),
-        ({"HTTP_X_FORWARDED_PROTO": "http"}, "127.0.0.2"),
-        ({"HTTP_ORIGIN": "https://attacker.example"}, "127.0.0.2"),
-        ({"HTTP_ORIGIN": ""}, "127.0.0.2"),
-        ({"HTTP_HOST": "attacker.example"}, "127.0.0.2"),
-        ({"HTTP_X_FORWARDED_FOR": "198.51.100.8, 1.2.3.4"}, "127.0.0.2"),
+        "",
+        "not-an-ip",
+        "198.51.100.8, 1.2.3.4",
     ],
 )
-def test_login_rejects_untrusted_transport_and_headers(setup_app, headers, peer):
+def test_login_rejects_invalid_forwarded_address(setup_app, forwarded_ip):
     app, _ = setup_app
-    assert login(app, headers=headers, peer=peer)["status"] in (400, 403)
+    assert login(app, ip=forwarded_ip)["status"] == 400
     assert callback(app, connection())[1]["reject"]
 
 

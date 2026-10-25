@@ -1,8 +1,6 @@
-# In Compose this origin is overridden by PUBLIC_ORIGIN derived from AUTH_DOMAIN.
-public_origin = "https://access.example.com"
-
-# Dedicated Caddy address; never trust an entire private-address range.
-trusted_proxies = ["172.30.55.2/32"]
+# Set the exact WAF/proxy source IPs when deployed behind one.
+# Empty means use the direct connection's IP and ignore forwarded headers.
+trusted_proxies = []
 # Host through the Docker gateway, and the optional FRPS container.
 plugin_sources = ["127.0.0.1/32", "172.30.55.1/32", "172.30.55.4/32"]
 

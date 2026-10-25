@@ -3,9 +3,6 @@ services:
     build: .
     image: frp-pass:local
     restart: unless-stopped
-    environment:
-      FRP_AUTH_CONFIG: /config/config.toml
-      PUBLIC_ORIGIN: https://${AUTH_DOMAIN:?Set AUTH_DOMAIN in .env}
     volumes:
       - type: bind
         source: ./config.toml
@@ -30,35 +27,8 @@ services:
         max-size: 10m
         max-file: "3"
 
-  caddy:
-    image: caddy:2.11.7
-    restart: unless-stopped
-    depends_on:
-      auth:
-        condition: service_healthy
-    environment:
-      AUTH_DOMAIN: ${AUTH_DOMAIN:?Set AUTH_DOMAIN in .env}
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
-    networks:
-      authnet:
-        ipv4_address: 172.30.55.2
-    logging:
-      options:
-        max-size: 10m
-        max-file: "3"
-
 networks:
   authnet:
     ipam:
       config:
         - subnet: 172.30.55.0/24
-
-volumes:
-  caddy_data:
-  caddy_config:

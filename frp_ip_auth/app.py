@@ -119,8 +119,6 @@ class Application:
         ip = self.client_ip(env)
         if method == "GET":
             return self.page(ip)
-        if env.get("HTTP_ORIGIN") != self.settings.public_origin:
-            raise RequestError(403, "Invalid Origin")
         if not self.limiter.admit(ip):
             self.audit("login_rate_limited", ip=ip)
             raise RequestError(429, "Too many login attempts; retry after 60 seconds")
@@ -140,15 +138,6 @@ class Application:
     def client_ip(self, env):
         peer = self.peer_ip(env)
         trusted = in_networks(peer, self.settings.trusted_proxies)
-        secure = env.get("wsgi.url_scheme") == "https"
-        # Gunicorn must not trust forwarded scheme headers from arbitrary peers.
-        if trusted:
-            secure = env.get("HTTP_X_FORWARDED_PROTO") == "https"
-        if not secure:
-            raise RequestError(403, "HTTPS required")
-        expected_host = urlsplit(self.settings.public_origin).netloc.lower()
-        if env.get("HTTP_HOST", "").lower() != expected_host:
-            raise RequestError(403, "Invalid Host")
         if trusted:
             try:
                 # Exactly one trusted hop. Proxy must overwrite, not append, this header.
