@@ -3,7 +3,7 @@
 用户名密码登录后，给当前 IP 授权五分钟，允许连接指定的 FRP 通道。
 Python + Gunicorn + 原生 WSGI，无 Web 应用框架、OTP、数据库或登录会话。
 
-**项目只提供 HTTP 服务，域名、HTTPS 和证书由前置 WAF 负责。**
+**项目只提供普通 HTTP 服务，默认端口 9000。**
 
 ## Docker 部署
 
@@ -20,24 +20,13 @@ users.admin.password_hash。配置文件需能被容器 UID/GID 10001:10001 读�
 docker compose up -d
 ```
 
-服务默认监听宿主机 `127.0.0.1:9000`，登录页为 `/login`，无需 .env 或域名配置。
-WAF 在其他机器时，将 Compose 端口映射改为 `宿主机内网IP:9000:9000`，供 WAF 回源。
-
-## 前置 WAF
-
-- 将 `/` 和 `/login` 回源到本服务的 HTTP 9000 端口；`/handler`、`/health` 不对外转发。
-- WAF 覆盖 `X-Forwarded-For`，只传递一个真实客户端 IP，不拼接客户端传来的地址链。
-- `trusted_proxies` 填写应用实际看到的 WAF/反代来源 IP，只对这些来源读取转发头。
-- `trusted_proxies = []` 表示使用连接对端 IP，并忽略所有转发头。
-- 宿主机反代经过 Docker 映射端口访问时，来源通常是 Docker 网关 `172.30.55.1`，
-  不一定是反代机器的 127.0.0.1；可以通过访问日志核对。
-
-服务不校验外部域名、Origin 或 X-Forwarded-Proto，也不申请证书或执行 HTTPS 跳转。
+服务默认监听宿主机 `127.0.0.1:9000`，直接访问 `http://127.0.0.1:9000/login`。
+如需局域网访问，将 Compose 端口映射改为 `宿主机内网IP:9000:9000`。
 
 ## 配置
 
 ```toml
-trusted_proxies = ["172.30.55.1/32"] # 按实际 WAF/反代来源修改
+trusted_proxies = [] # 默认记录连接来源 IP
 plugin_sources = ["127.0.0.1/32", "172.30.55.1/32", "172.30.55.4/32"]
 
 [channels]
@@ -52,8 +41,9 @@ channels = ["ssh", "rdp"]
 一次登录授权该账号配置的全部通道。通道名需与 FRPS 的完整 proxy_name 一致；
 frpc 配置 user 时，名称可能包含用户前缀。修改配置后执行 `docker compose restart auth`。
 
-旧版本升级：从配置中删除 public_origin，移除旧 Caddy 容器（可使用
-`docker compose up -d --build --remove-orphans`）。原 .env 中的 AUTH_DOMAIN 已不再使用。
+默认使用连接来源 IP；仅在配置 `trusted_proxies` 时读取可信代理传来的单个
+`X-Forwarded-For` 地址。升级旧版本时请按最新配置模板调整，并执行
+`docker compose up -d --build --remove-orphans`。
 
 ## 接入 FRPS
 

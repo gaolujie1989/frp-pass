@@ -1,4 +1,3 @@
-# Set the exact WAF/proxy source IPs when deployed behind one.
 # Empty means use the direct connection's IP and ignore forwarded headers.
 trusted_proxies = []
 # Host through the Docker gateway, and the optional FRPS container.
