@@ -1,0 +1,16 @@
+# In Compose this origin is overridden by PUBLIC_ORIGIN derived from AUTH_DOMAIN.
+public_origin = "https://access.example.com"
+
+# Dedicated Caddy address; never trust an entire private-address range.
+trusted_proxies = ["172.30.55.2/32"]
+# Host through the Docker gateway, and the optional FRPS container.
+plugin_sources = ["127.0.0.1/32", "172.30.55.1/32", "172.30.55.4/32"]
+
+[channels]
+ssh = "tcp"
+rdp = "tcp"
+
+[users.admin]
+# Generate using: docker compose run --rm --no-deps auth python -m frp_ip_auth.hash_password
+password_hash = "REPLACE_WITH_GENERATED_ARGON2ID_HASH"
+channels = ["ssh", "rdp"]

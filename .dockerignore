@@ -1,0 +1,16 @@
+.git
+.venv
+.env
+.superpowers
+config.toml
+deploy/frps.toml
+deploy/frpc.toml
+__pycache__
+**/__pycache__
+.pytest_cache
+.ruff_cache
+*.egg-info
+build
+dist
+tests
+docs

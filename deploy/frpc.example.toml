@@ -1,0 +1,18 @@
+serverAddr = "YOUR_FRPS_SERVER"
+serverPort = 7000
+auth.method = "token"
+auth.token = "REPLACE_WITH_THE_SAME_FRP_TOKEN"
+
+[[proxies]]
+name = "ssh"
+type = "tcp"
+localIP = "127.0.0.1"
+localPort = 22
+remotePort = 60022
+
+[[proxies]]
+name = "rdp"
+type = "tcp"
+localIP = "YOUR_WINDOWS_LAN_IP"
+localPort = 3389
+remotePort = 63389

@@ -1,0 +1,23 @@
+# Optional: docker compose -f compose.yaml -f compose.frps.yaml up -d --build
+services:
+  frps:
+    image: fatedier/frps:v0.71.1
+    command: ["-c", "/etc/frp/frps.toml"]
+    restart: unless-stopped
+    depends_on:
+      auth:
+        condition: service_healthy
+    volumes:
+      - type: bind
+        source: ./deploy/frps.toml
+        target: /etc/frp/frps.toml
+        read_only: true
+        bind:
+          create_host_path: false
+    ports:
+      - "7000:7000"
+      - "60022:60022"
+      - "63389:63389"
+    networks:
+      authnet:
+        ipv4_address: 172.30.55.4

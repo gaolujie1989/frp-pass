@@ -1,0 +1,34 @@
+{
+	admin off
+	servers {
+		timeouts {
+			read_header 10s
+			read_body 10s
+			write 15s
+			idle 30s
+		}
+	}
+}
+
+{$AUTH_DOMAIN} {
+	header Strict-Transport-Security "max-age=31536000"
+	request_body {
+		max_size 4KB
+	}
+	@public path / /login
+	handle @public {
+		reverse_proxy auth:9000 {
+			# The app expects a single address, not an arbitrary forwarded chain.
+			header_up X-Forwarded-For {remote_host}
+			header_up X-Forwarded-Proto https
+			transport http {
+				dial_timeout 3s
+				response_header_timeout 10s
+			}
+		}
+	}
+	# The FRP callback and health endpoint are not public routes.
+	handle {
+		respond "Not found" 404
+	}
+}

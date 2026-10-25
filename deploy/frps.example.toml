@@ -1,0 +1,10 @@
+bindPort = 7000
+auth.method = "token"
+auth.token = "REPLACE_WITH_A_LONG_RANDOM_FRP_TOKEN"
+allowPorts = [{single = 60022}, {single = 63389}]
+
+[[httpPlugins]]
+name = "ip-auth"
+addr = "auth:9000"
+path = "/handler"
+ops = ["NewProxy", "NewUserConn"]
