@@ -1,6 +1,7 @@
 # In-memory grants require exactly one worker. Do not increase workers or replicas.
 bind = "0.0.0.0:9000"
 workers = 1
+control_socket_disable = True
 worker_class = "gthread"
 threads = 8
 timeout = 30

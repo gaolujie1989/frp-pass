@@ -10,7 +10,7 @@ from pathlib import Path
 
 
 def docker(*args):
-    return subprocess.check_output(["docker", *args], text=True).strip()
+    return subprocess.check_output(["docker", *args], text=True, stderr=subprocess.STDOUT).strip()
 
 
 def main():
@@ -74,6 +74,7 @@ def main():
             with opener.open(url, data=data, timeout=3) as response:
                 assert "授权成功" in response.read().decode()
             assert docker("inspect", "--format", "{{.Config.User}}", container) == "10001:10001"
+            assert "[ERROR]" not in docker("logs", container), "Container startup logged an error"
             print(
                 "PASS: non-root read-only HTTP container serves health and accepts password login"
             )
